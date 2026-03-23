@@ -1,0 +1,17 @@
+streamlit
+python-dotenv
+pandas
+PyPDF2
+
+# LangChain & providers
+langchain>=0.2.14
+langchain-text-splitters
+langchain-google-genai>=2.0.1
+google-generativeai>=0.8.3
+
+# Vector DB
+faiss-cpu
+
+# Embeddings
+sentence-transformers
+langchain-huggingface
