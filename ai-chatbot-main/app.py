@@ -41,7 +41,7 @@ def get_answer(user_question, api_key):
     context = "\n\n".join([doc.page_content for doc in docs])
 
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-2.0-flash")
+    model = genai.GenerativeModel("gemini-1.5-flash")
     prompt = f"""Answer the question as detailed as possible from the provided context.
 If the answer is not in the context, say "answer is not available in the context". Do not hallucinate.
 
@@ -60,25 +60,11 @@ Answer:"""
             return "⚠️ Gemini API rate limit hit. Please wait 60 seconds and try again."
         return f"⚠️ Error: {str(e)}"
 
-
-def user_input(user_question, api_key, pdf_docs, conversation_history):
-    if not api_key or not pdf_docs:
-        st.warning("Please upload PDF files before asking a question.")
+# Extracted rendering logic so it persists on screen
+def render_chat_history():
+    if not st.session_state.conversation_history:
         return
-
-    with st.spinner("Reading PDFs and building index..."):
-        build_vector_store(get_text_chunks(get_pdf_text(pdf_docs)))
-    with st.spinner("Thinking..."):
-        response_output = get_answer(user_question, api_key)
-
-    pdf_names = ", ".join([pdf.name for pdf in pdf_docs])
-    conversation_history.append((
-        user_question,
-        response_output,
-        datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-        pdf_names
-    ))
-
+        
     st.markdown("""
         <style>
             .section-title { font-weight: 600; font-size: 1rem; opacity: 0.85; margin: 0.25rem 0 0.5rem 0; }
@@ -100,19 +86,23 @@ def user_input(user_question, api_key, pdf_docs, conversation_history):
     """, unsafe_allow_html=True)
 
     st.markdown('<div class="chat-wrap">', unsafe_allow_html=True)
+    
+    # Render Latest Exchange
+    latest = st.session_state.conversation_history[-1]
     st.markdown('<div class="section-title">Latest exchange</div>', unsafe_allow_html=True)
     st.markdown(f"""
         <div class="chat-message user">
             <div class="avatar"><img src="https://i.ibb.co/CKpTnWr/user-icon-2048x2048-ihoxz4vq.png"></div>
-            <div class="message">{user_question}</div>
+            <div class="message">{latest[0]}</div>
         </div>
         <div class="chat-message bot">
             <div class="avatar"><img src="https://i.ibb.co/wNmYHsx/langchain-logo.webp"></div>
-            <div class="message">{response_output}</div>
+            <div class="message">{latest[1]}</div>
         </div>
     """, unsafe_allow_html=True)
 
-    history_to_show = conversation_history[:-1]
+    # Render Previous Messages
+    history_to_show = st.session_state.conversation_history[:-1]
     if history_to_show:
         st.markdown('<hr class="clean" />', unsafe_allow_html=True)
         st.markdown('<div class="section-title">Previous messages</div>', unsafe_allow_html=True)
@@ -131,16 +121,6 @@ def user_input(user_question, api_key, pdf_docs, conversation_history):
             """, unsafe_allow_html=True)
 
     st.markdown('</div>', unsafe_allow_html=True)
-
-    if st.session_state.conversation_history:
-        df = pd.DataFrame(
-            st.session_state.conversation_history,
-            columns=["Question", "Answer", "Timestamp", "PDF Name"]
-        )
-        csv = df.to_csv(index=False)
-        b64 = base64.b64encode(csv.encode()).decode()
-        href = f'<a class="sidebar-note" href="data:file/csv;base64,{b64}" download="conversation_history.csv">Download conversation history (CSV)</a>'
-        st.sidebar.markdown(href, unsafe_allow_html=True)
 
 
 def main():
@@ -165,10 +145,12 @@ def main():
         if col2.button("Reset"):
             st.session_state.conversation_history = []
             st.session_state.vector_store = None
+            st.rerun()
 
         if col1.button("Clear last"):
             if st.session_state.conversation_history:
                 st.session_state.conversation_history.pop()
+                st.rerun()
 
         pdf_docs = st.file_uploader(
             "Upload PDF files",
@@ -176,15 +158,51 @@ def main():
             type=["pdf"],
             help="You can select multiple PDFs at once."
         )
+        
+        # Moved embedding logic entirely to the button click
         if st.button("Submit & Process"):
             if pdf_docs:
+                with st.spinner("Reading PDFs and building index..."):
+                    # Process only once!
+                    raw_text = get_pdf_text(pdf_docs)
+                    text_chunks = get_text_chunks(raw_text)
+                    build_vector_store(text_chunks)
                 st.success("Ready. Ask your question below.")
             else:
                 st.warning("Please upload PDF files before processing.")
+                
+        # CSV Download Logic
+        if st.session_state.conversation_history:
+            df = pd.DataFrame(
+                st.session_state.conversation_history,
+                columns=["Question", "Answer", "Timestamp", "PDF Name"]
+            )
+            csv = df.to_csv(index=False)
+            b64 = base64.b64encode(csv.encode()).decode()
+            href = f'<a class="sidebar-note" href="data:file/csv;base64,{b64}" download="conversation_history.csv">Download conversation history (CSV)</a>'
+            st.markdown(href, unsafe_allow_html=True)
 
-    user_question = st.text_input("Your question about the uploaded PDFs")
+    # Use st.chat_input to prevent the infinite refresh loop
+    user_question = st.chat_input("Your question about the uploaded PDFs")
+    
     if user_question:
-        user_input(user_question, api_key, pdf_docs, st.session_state.conversation_history)
+        if st.session_state.vector_store is None:
+            st.error("Please upload PDFs and click 'Submit & Process' first!")
+        else:
+            # We ONLY do the thinking and generation here
+            with st.spinner("Thinking..."):
+                response_output = get_answer(user_question, api_key)
+
+            pdf_names = ", ".join([pdf.name for pdf in pdf_docs]) if pdf_docs else "Unknown"
+            st.session_state.conversation_history.append((
+                user_question,
+                response_output,
+                datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                pdf_names
+            ))
+
+    # Render UI at the very end so it survives button clicks
+    render_chat_history()
 
 
 if __name__ == "__main__":
