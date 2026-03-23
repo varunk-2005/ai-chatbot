@@ -3,10 +3,14 @@ python-dotenv
 pandas
 PyPDF2
 
-# LangChain & providers
-langchain>=0.2.14
+# LangChain
+langchain==0.3.25
 langchain-text-splitters
+langchain-community
 langchain-google-genai>=2.0.1
+langchain-huggingface
+
+# Google
 google-generativeai>=0.8.3
 
 # Vector DB
@@ -14,5 +18,3 @@ faiss-cpu
 
 # Embeddings
 sentence-transformers
-langchain-huggingface
-langchain-community
