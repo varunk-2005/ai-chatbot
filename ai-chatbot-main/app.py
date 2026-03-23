@@ -52,8 +52,13 @@ Question:
 {user_question}
 
 Answer:"""
-    response = model.generate_content(prompt)
-    return response.text
+    try:
+        response = model.generate_content(prompt)
+        return response.text
+    except Exception as e:
+        if "ResourceExhausted" in str(type(e)):
+            return "⚠️ Gemini API rate limit hit. Please wait 60 seconds and try again."
+        return f"⚠️ Error: {str(e)}"
 
 
 def user_input(user_question, api_key, pdf_docs, conversation_history):
@@ -61,8 +66,10 @@ def user_input(user_question, api_key, pdf_docs, conversation_history):
         st.warning("Please upload PDF files before asking a question.")
         return
 
-    build_vector_store(get_text_chunks(get_pdf_text(pdf_docs)))
-    response_output = get_answer(user_question, api_key)
+    with st.spinner("Reading PDFs and building index..."):
+        build_vector_store(get_text_chunks(get_pdf_text(pdf_docs)))
+    with st.spinner("Thinking..."):
+        response_output = get_answer(user_question, api_key)
 
     pdf_names = ", ".join([pdf.name for pdf in pdf_docs])
     conversation_history.append((
