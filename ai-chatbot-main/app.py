@@ -41,7 +41,7 @@ def get_answer(user_question, api_key):
     context = "\n\n".join([doc.page_content for doc in docs])
 
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-1.5-flash")
+    model = genai.GenerativeModel("gemini-2.5-flash")
     prompt = f"""Answer the question as detailed as possible from the provided context.
 If the answer is not in the context, say "answer is not available in the context". Do not hallucinate.
 
