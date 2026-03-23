@@ -15,3 +15,4 @@ faiss-cpu
 # Embeddings
 sentence-transformers
 langchain-huggingface
+langchain-community
